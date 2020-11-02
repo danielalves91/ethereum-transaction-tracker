@@ -42,14 +42,21 @@ address_list = [
    ]
 
 def get_abi(contract_address):
+
     url = f'https://api.etherscan.io/api?module=contract&action=getabi&address={contract_address}&apikey={etherscan_key}'
     result = json.loads(requests.get(url).text)['result']
     gecko_url = f'https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses={contract_address}&vs_currencies=usd'
-    gecko_result = json.loads(requests.get(gecko_url).text)
+    try:
+        gecko_result = json.loads(requests.get(gecko_url).text)
+    except:
+        import ipdb; ipdb.set_trace()
     
     if 'inputs' in result:
         contract = web3.eth.contract(address=web3.toChecksumAddress(contract_address), abi=result)
-        token_name = contract.functions.name().call()
+        try:
+            token_name = contract.functions.name().call()
+        except:
+            import ipdb; ipdb.set_trace()
         token_symbol = contract.functions.symbol().call()
         token_decimals = contract.functions.decimals().call()
         if gecko_result:
@@ -97,22 +104,32 @@ def uniswap_transaction(hex_data, method_id):
     for number in mapping:
         for element in hex_data:
             if number == element:
+                while not len(hex_data[-1]) == 40:
+                    hex_data[-1] = '0' + hex_data[-1]
                 to_contract_address  = '0x' + hex_data[-1]
                 token_bought = get_abi(to_contract_address)
                 token_sold = get_abi('0x' + hex_data[-int(number)])
-                for element in amount_mapping:
-                    if method_id in element:
-                        amount_bought = element[method_id]['out'] / int('1' + '0'*token_bought[-2])
-                        amount_sold = element[method_id]['in'] / int('1' + '0'*token_sold[-2])
 
-                        print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
-                        print(f"tx: https://etherscan.io/tx/{tx}")
-                        print(f"Token sold: {token_sold[-3]}")
-                        print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
-                        print(f"Token bought: {token_bought[-4]}")
-                        print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
+                if "not verified" in token_bought or "not verified" in token_sold:
+                    for element in amount_mapping:
+                        if method_id in element:
+                            print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
+                            print(f"tx: https://etherscan.io/tx/{tx}")    
+                            print("Token contract has not been verified, unable to retrieve token information\n") 
 
-   
+                else:
+                    for element in amount_mapping:
+                        if method_id in element:
+                            amount_bought = element[method_id]['out'] / int('1' + '0'*token_bought[-2])
+                            amount_sold = element[method_id]['in'] / int('1' + '0'*token_sold[-2])
+
+                            print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
+                            print(f"tx: https://etherscan.io/tx/{tx}")
+                            print(f"Token sold: {token_sold[-3]}")
+                            print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
+                            print(f"Token bought: {token_bought[-4]}")
+                            print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
+
 def decode_data_input(input_data):
     
     method_id = input_data[:10]
@@ -131,14 +148,14 @@ def decode_data_input(input_data):
          {"0x791ac947": 'swapExactTokensForETHSupportingFeeOnTransferTokens', 'function': uniswap_transaction}
         #  {"0x095ea7b3": 'approve', 'function': uniswap_transaction}
         ]
-
+	
     for method in methods:
         if method_id in method:
             data = '0' * 10 + input_data
             data = [ data[i:i+64] for i in range(20, len(data), 64) ]
             hex_data = []
             for i in data:
-                while i[0] == "0":
+                while i[0] == "0" and len(i) > 1:
                     i = i[1:]
                 hex_data.append(i)
             method['function'](hex_data, method_id)
