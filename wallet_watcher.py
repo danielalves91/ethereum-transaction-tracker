@@ -3,6 +3,7 @@ from web3.exceptions import TransactionNotFound, ABIFunctionNotFound
 import json
 import requests
 import os
+import re
 
 infura_key = os.environ.get('INFURA_KEY') 
 etherscan_key = os.environ.get('ETHERSCAN_KEY') 
@@ -41,31 +42,48 @@ address_list = [
    web3.toChecksumAddress('0x35C7BCFE1E7FE513F39E72E9E0B12855D901E263')
    ]
 
-def get_abi(contract_address):
+def get_price(contract_address):
 
-    url = f'https://api.etherscan.io/api?module=contract&action=getabi&address={contract_address}&apikey={etherscan_key}'
-    result = json.loads(requests.get(url).text)['result']
     gecko_url = f'https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses={contract_address}&vs_currencies=usd'
     try:
         gecko_result = json.loads(requests.get(gecko_url).text)
     except:
         import ipdb; ipdb.set_trace()
-    
-    if 'inputs' in result:
+    if gecko_result:
+        token_price = json.loads(requests.get(gecko_url).text).get(contract_address.lower())['usd']
+    else:
+        token_price = 0
+    return token_price
+
+def get_abi(contract_address):
+
+    url = f'https://api.etherscan.io/api?module=contract&action=getabi&address={contract_address}&apikey={etherscan_key}'
+    result = json.loads(requests.get(url).text)['result']
+
+    if '"name":"name"' in result:
         contract = web3.eth.contract(address=web3.toChecksumAddress(contract_address), abi=result)
-        try:
-            token_name = contract.functions.name().call()
-        except:
-            import ipdb; ipdb.set_trace()
+        token_name = contract.functions.name().call()
         token_symbol = contract.functions.symbol().call()
         token_decimals = contract.functions.decimals().call()
-        if gecko_result:
-            token_price = json.loads(requests.get(gecko_url).text).get(contract_address.lower())['usd']
-        else:
-            token_price = 0
+        token_price = get_price(contract_address)
+
         return (contract, token_name, token_symbol, token_decimals, token_price)
-    elif "Contract source code not verified":
-        return "Contract source code not verified"
+
+    if '"inputs"' in result or 'not verified' in result: 
+        url = f'https://etherscan.io/token/{contract_address}'
+        headers = {
+            'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'
+        }
+
+        request = requests.get(url, headers=headers)
+
+        pattern = re.compile('(?<="Description" content=")([^\(]*)\(([^\)]*)')
+        decimal_pattern = re.compile("(?<=\\'decimals\\': \\')\d+")
+        token_name, token_symbol = pattern.findall(request.text)[0][0], pattern.findall(request.text)[0][1]
+        token_decimals = decimal_pattern.findall(request.text)[0][0]
+        token_price = get_price(contract_address)
+
+        return (token_name, token_symbol, token_decimals, token_price)
 
 def transfer(hex_data, method=''):
     to_contract_address = web3.eth.getTransaction(tx).to
@@ -98,7 +116,7 @@ def uniswap_transaction(hex_data, method_id):
         {"0xfb3bdb41": {'from_address': hex_data[3], 'in': web3.eth.getTransaction(tx).value, 'out': int(hex_data[0], 16)}},
         {"0x5c11d795": {'from_address': hex_data[3], 'in': int(hex_data[0], 16), 'out': int(hex_data[1], 16)}},
         {"0xb6f9de95": {'from_address': hex_data[3], 'in': web3.eth.getTransaction(tx).value, 'out': int(hex_data[0], 16)}},
-        {"0x791ac947": {'from_address': hex_data[3], 'in': int(hex_data[0], 16), 'out': int(hex_data[0], 16)}}
+        {"0x791ac947": {'from_address': hex_data[3], 'in': int(hex_data[0], 16), 'out': int(hex_data[1], 16)}}
     ]
     
     for number in mapping:
@@ -108,27 +126,31 @@ def uniswap_transaction(hex_data, method_id):
                     hex_data[-1] = '0' + hex_data[-1]
                 to_contract_address  = '0x' + hex_data[-1]
                 token_bought = get_abi(to_contract_address)
+
+                while not len(hex_data[-int(number)]) == 40:
+                    hex_data[-int(number)] = '0' + hex_data[-int(number)]    
                 token_sold = get_abi('0x' + hex_data[-int(number)])
 
-                if "not verified" in token_bought or "not verified" in token_sold:
-                    for element in amount_mapping:
-                        if method_id in element:
-                            print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
-                            print(f"tx: https://etherscan.io/tx/{tx}")    
-                            print("Token contract has not been verified, unable to retrieve token information\n") 
+                # if "not verified" in token_bought or "not verified" in token_sold:
+                #     for element in amount_mapping:
+                #         if method_id in element:
+                #             print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
+                #             print(f"tx: https://etherscan.io/tx/{tx}")    
+                #             print("Token contract has not been verified, unable to retrieve token information\n") 
 
-                else:
-                    for element in amount_mapping:
-                        if method_id in element:
-                            amount_bought = element[method_id]['out'] / int('1' + '0'*token_bought[-2])
-                            amount_sold = element[method_id]['in'] / int('1' + '0'*token_sold[-2])
-
-                            print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
-                            print(f"tx: https://etherscan.io/tx/{tx}")
-                            print(f"Token sold: {token_sold[-3]}")
-                            print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
-                            print(f"Token bought: {token_bought[-4]}")
-                            print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
+                for element in amount_mapping:
+                    if method_id in element:
+                        try:
+                            amount_bought = element[method_id]['out'] / int('1' + '0'*int(token_bought[-2]))
+                            amount_sold = element[method_id]['in'] / int('1' + '0'*int(token_sold[-2]))
+                        except TypeError:
+                            import ipdb; ipdb.set_trace()
+                        print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
+                        print(f"tx: https://etherscan.io/tx/{tx}")
+                        print(f"Token sold: {token_sold[-3]}")
+                        print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
+                        print(f"Token bought: {token_bought[-4]}")
+                        print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
 
 def decode_data_input(input_data):
     
@@ -169,7 +191,8 @@ while True:
                 data_input = decode_data_input(web3.eth.getTransaction(tx).input)
 
     except TransactionNotFound:
+        print("transaction not found\n")
         continue
     except KeyError:
-        print("key error")
+        print("key error\n")
         continue
