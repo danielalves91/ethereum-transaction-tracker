@@ -46,14 +46,14 @@ def get_abi(contract_address):
     result = json.loads(requests.get(url).text)['result']
     gecko_url = f'https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses={contract_address}&vs_currencies=usd'
     gecko_result = json.loads(requests.get(gecko_url).text)
-
+    
     if 'inputs' in result:
         contract = web3.eth.contract(address=web3.toChecksumAddress(contract_address), abi=result)
         token_name = contract.functions.name().call()
         token_symbol = contract.functions.symbol().call()
         token_decimals = contract.functions.decimals().call()
         if gecko_result:
-            token_price = json.loads(requests.get(gecko_url).text).get(contract_address)['usd']
+            token_price = json.loads(requests.get(gecko_url).text).get(contract_address.lower())['usd']
         else:
             token_price = 0
         return (contract, token_name, token_symbol, token_decimals, token_price)
@@ -63,7 +63,7 @@ def get_abi(contract_address):
 def transfer(hex_data, method=''):
     to_contract_address = web3.eth.getTransaction(tx).to
     token_info = get_abi(to_contract_address)
-    to_address,value = hex_data[0], int(hex_data[1], 16) / int('1' + '0'*token_info[-1])   
+    to_address,value = hex_data[0], int(hex_data[1], 16) / int('1' + '0'*int(token_info[-2]))   
 
     print(f"Pending transfer from sending address: https://etherscan.io/address/{from_address}")
     print(f"Receiving address: https://etherscan.io/address/{to_address}")
@@ -118,17 +118,17 @@ def decode_data_input(input_data):
     method_id = input_data[:10]
 
     methods = [
-         {"0xa9059cbb": 'transfer', 'function': transfer},
-         {"0x1a695230": 'transfer(address addr)', 'function': transfer}
-        #  {"0x38ed1739": 'swapExactTokensForTokens', 'function': uniswap_transaction},
-        #  {"0x8803dbee": 'swapTokensForExactTokens', 'function': uniswap_transaction},
-        #  {"0x7ff36ab5": 'swapExactETHForTokens', 'function': uniswap_transaction},
-        #  {"0x4a25d94a": 'swapTokensForExactETH', 'function': uniswap_transaction},
-        #  {"0x18cbafe5": 'swapExactTokensForETH', 'function': uniswap_transaction},
-        #  {"0xfb3bdb41": 'swapETHForExactTokens', 'function': uniswap_transaction},
-        #  {"0x5c11d795": 'swapExactTokensForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
-        #  {"0xb6f9de95": 'swapExactETHForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
-        #  {"0x791ac947": 'swapExactTokensForETHSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+        #  {"0xa9059cbb": 'transfer', 'function': transfer},
+        #  {"0x1a695230": 'transfer(address addr)', 'function': transfer}
+         {"0x38ed1739": 'swapExactTokensForTokens', 'function': uniswap_transaction},
+         {"0x8803dbee": 'swapTokensForExactTokens', 'function': uniswap_transaction},
+         {"0x7ff36ab5": 'swapExactETHForTokens', 'function': uniswap_transaction},
+         {"0x4a25d94a": 'swapTokensForExactETH', 'function': uniswap_transaction},
+         {"0x18cbafe5": 'swapExactTokensForETH', 'function': uniswap_transaction},
+         {"0xfb3bdb41": 'swapETHForExactTokens', 'function': uniswap_transaction},
+         {"0x5c11d795": 'swapExactTokensForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+         {"0xb6f9de95": 'swapExactETHForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+         {"0x791ac947": 'swapExactTokensForETHSupportingFeeOnTransferTokens', 'function': uniswap_transaction}
         #  {"0x095ea7b3": 'approve', 'function': uniswap_transaction}
         ]
 
