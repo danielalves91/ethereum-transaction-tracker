@@ -41,10 +41,6 @@ address_list = [
    web3.toChecksumAddress('0x35C7BCFE1E7FE513F39E72E9E0B12855D901E263')
    ]
 
-
-#import ipdb; ipdb.set_trace()
-# while True:
-
 def get_abi(contract_address):
     url = f'https://api.etherscan.io/api?module=contract&action=getabi&address={contract_address}&apikey={etherscan_key}'
     result = json.loads(requests.get(url).text)['result']
@@ -59,7 +55,7 @@ def get_abi(contract_address):
         if gecko_result:
             token_price = json.loads(requests.get(gecko_url).text).get(contract_address)['usd']
         else:
-            token_price = "Could not get token price"
+            token_price = 0
         return (contract, token_name, token_symbol, token_decimals, token_price)
     elif "Contract source code not verified":
         return "Contract source code not verified"
@@ -69,11 +65,11 @@ def transfer(hex_data, method=''):
     token_info = get_abi(to_contract_address)
     to_address,value = hex_data[0], int(hex_data[1], 16) / int('1' + '0'*token_info[-1])   
 
-    print(f" Pending transfer from sending address: https://etherscan.io/address/{from_address}")
+    print(f"Pending transfer from sending address: https://etherscan.io/address/{from_address}")
     print(f"Receiving address: https://etherscan.io/address/{to_address}")
     print(f"tx: https://etherscan.io/tx/{tx}")
-    print(f"Token transferred: {token_info[-3]}")
-    print(f"Amount transferred: {value} {token_info[-2]}\n")
+    print(f"Token transferred: {token_info[-4]}")
+    print(f"Amount transferred: {value} {token_info[-3]}\n")
 
     # return {
     #     'to_contract_address': to_contract_address,
@@ -112,15 +108,10 @@ def uniswap_transaction(hex_data, method_id):
                         print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
                         print(f"tx: https://etherscan.io/tx/{tx}")
                         print(f"Token sold: {token_sold[-3]}")
-                        if token_sold[-1]:
-                            print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
-                        else:
-                            print(f"Amount sold: {amount_sold} {token_sold[-3]}")
+                        print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
                         print(f"Token bought: {token_bought[-4]}")
-                        if token_bought[-1]:
-                            print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
-                        else:
-                           print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} ({token_bought[-1]})\n") 
+                        print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
+
    
 def decode_data_input(input_data):
     
@@ -128,17 +119,17 @@ def decode_data_input(input_data):
 
     methods = [
          {"0xa9059cbb": 'transfer', 'function': transfer},
-         {"0x1a695230": 'transfer(address addr)', 'function': transfer},
-         {"0x38ed1739": 'swapExactTokensForTokens', 'function': uniswap_transaction},
-         {"0x8803dbee": 'swapTokensForExactTokens', 'function': uniswap_transaction},
-         {"0x7ff36ab5": 'swapExactETHForTokens', 'function': uniswap_transaction},
-         {"0x4a25d94a": 'swapTokensForExactETH', 'function': uniswap_transaction},
-         {"0x18cbafe5": 'swapExactTokensForETH', 'function': uniswap_transaction},
-         {"0xfb3bdb41": 'swapETHForExactTokens', 'function': uniswap_transaction},
-         {"0x5c11d795": 'swapExactTokensForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
-         {"0xb6f9de95": 'swapExactETHForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
-         {"0x791ac947": 'swapExactTokensForETHSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
-         {"0x095ea7b3": 'approve', 'function': uniswap_transaction}
+         {"0x1a695230": 'transfer(address addr)', 'function': transfer}
+        #  {"0x38ed1739": 'swapExactTokensForTokens', 'function': uniswap_transaction},
+        #  {"0x8803dbee": 'swapTokensForExactTokens', 'function': uniswap_transaction},
+        #  {"0x7ff36ab5": 'swapExactETHForTokens', 'function': uniswap_transaction},
+        #  {"0x4a25d94a": 'swapTokensForExactETH', 'function': uniswap_transaction},
+        #  {"0x18cbafe5": 'swapExactTokensForETH', 'function': uniswap_transaction},
+        #  {"0xfb3bdb41": 'swapETHForExactTokens', 'function': uniswap_transaction},
+        #  {"0x5c11d795": 'swapExactTokensForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+        #  {"0xb6f9de95": 'swapExactETHForTokensSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+        #  {"0x791ac947": 'swapExactTokensForETHSupportingFeeOnTransferTokens', 'function': uniswap_transaction},
+        #  {"0x095ea7b3": 'approve', 'function': uniswap_transaction}
         ]
 
     for method in methods:
@@ -146,21 +137,18 @@ def decode_data_input(input_data):
             data = '0' * 10 + input_data
             data = [ data[i:i+64] for i in range(20, len(data), 64) ]
             hex_data = []
-            try: 
-                for i in data:
-                    while i[0] == "0":
-                        i = i[1:]
-                    hex_data.append(i)
-                method['function'](hex_data, method_id)
-            except:
-                pass
+            for i in data:
+                while i[0] == "0":
+                    i = i[1:]
+                hex_data.append(i)
+            method['function'](hex_data, method_id)
 
 while True:
     try:
         tx_list = [tx.hex() for tx in web3.eth.getBlock('pending')['transactions']]
         for tx in tx_list:
             from_address = web3.eth.getTransaction(tx)['from']
-            if from_address in address_list:
+            if from_address not in address_list:
                 data_input = decode_data_input(web3.eth.getTransaction(tx).input)
 
     except TransactionNotFound:
