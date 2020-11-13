@@ -11,6 +11,7 @@ etherscan_key = os.environ.get('ETHERSCAN_KEY')
 web3 = Web3(Web3.WebsocketProvider(f'wss://mainnet.infura.io/ws/v3/{infura_key}'))
 
 address_list = [
+   web3.toChecksumAddress('0xb8551f8577e93172d1f95cbb967c1042147b3a4d'),
    web3.toChecksumAddress('0xe7ee96303a82d383b678bc6ee8bc5d19c4abe852'),
    web3.toChecksumAddress('0x18c57894c5ccbb86a175c3576e4696df9c0a2d63'),
    web3.toChecksumAddress('0x4b3cd022df95c4fc7a2427ab5efaeba87dcdf436'),
@@ -131,13 +132,6 @@ def uniswap_transaction(hex_data, method_id):
                     hex_data[-int(number)] = '0' + hex_data[-int(number)]    
                 token_sold = get_abi('0x' + hex_data[-int(number)])
 
-                # if "not verified" in token_bought or "not verified" in token_sold:
-                #     for element in amount_mapping:
-                #         if method_id in element:
-                #             print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
-                #             print(f"tx: https://etherscan.io/tx/{tx}")    
-                #             print("Token contract has not been verified, unable to retrieve token information\n") 
-
                 for element in amount_mapping:
                     if method_id in element:
                         try:
@@ -147,9 +141,9 @@ def uniswap_transaction(hex_data, method_id):
                             import ipdb; ipdb.set_trace()
                         print(f"Pending transaction from address: https://etherscan.io/address/{element[method_id]['from_address']}")
                         print(f"tx: https://etherscan.io/tx/{tx}")
-                        print(f"Token sold: {token_sold[-3]}")
+                        print(f"Token sold: {token_sold[-3]} - ${round(token_sold[-1], 2)}")
                         print(f"Amount sold: {amount_sold} {token_sold[-3]} (${round(token_sold[-1] * amount_sold, 2)})")
-                        print(f"Token bought: {token_bought[-4]}")
+                        print(f"Token bought: {token_bought[-4]} - ${round(token_bought[-1], 2)}")
                         print(f"Amount received (estimated): {amount_bought} {token_bought[-3]} (${round(token_bought[-1] * amount_bought, 2)})\n")
 
 def decode_data_input(input_data):
